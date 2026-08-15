@@ -28,6 +28,8 @@ anything is actually happening.
   plus overall progress on the Windows taskbar button.
 - Notifies you when the batch finishes, even if the window is behind something else.
 - Lets you cancel individual files mid-transfer, and retry the ones that failed.
+- Has an **About** dialog, reachable from the link in the bottom left, that reports the version and
+  the host facts a bug report needs, with a button to copy them to the clipboard.
 
 ## Requirements
 
@@ -135,8 +137,9 @@ src/HyperDrop.Core/     Hyper-V access, transfer queue, settings. No UI dependen
   Transfer/              drop expansion, queue, rate estimation, staging
   Settings/              JSON-backed preferences
 src/HyperDrop.App/      WPF front end (net10.0-windows)
-  Interop/               UIPI drag & drop fix, taskbar flash
+  Interop/               UIPI drag & drop fix, taskbar flash, de-elevated link opening
   ViewModels/            MVVM layer
+  Views/                 credential prompt, About dialog, styles
 tests/HyperDrop.Core.Tests/
 ```
 
