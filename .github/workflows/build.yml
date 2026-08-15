@@ -1,0 +1,31 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    # HyperVDrop targets net10.0-windows and uses WPF, so it can only build on Windows.
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      # The test suite is deliberately free of Hyper-V dependencies so it runs on a plain
+      # GitHub runner with no Hyper-V role and no elevation.
+      - name: Test
+        run: dotnet test --no-build --configuration Release --verbosity normal

@@ -1,2 +1,141 @@
 # hyper-v-file-sharing
-Drag &amp; Drop file sharing into a Hyper-V VM
+
+**HyperVDrop** — a small Windows desktop app that lets you drag files and folders straight into a
+running Hyper-V virtual machine, with real progress and a notification when it finishes.
+
+No network share. No mounting VHDX files. No `Copy-VMFile` in an elevated prompt wondering whether
+anything is actually happening.
+
+```
+┌────────────────────────────────────────────────────────────┐
+│ VM: [ WIN11-DEV        ▾ ] ⟳    Guest Service: Enabled      │
+│ Destination in guest: [ C:\Users\Public\Downloads       ]  │
+│ ☐ Overwrite existing      ☑ Create destination folders     │
+├────────────────────────────────────────────────────────────┤
+│ installer.msi     ▓▓▓▓▓▓▓▓░░░░  64%  18.2 MB/s  0:07 left ✕│
+│ docs\readme.md    ✔ Done                                   │
+├────────────────────────────────────────────────────────────┤
+│ Overall ▓▓▓▓▓░░░░░  2 of 5 files       [ Clear completed ] │
+└────────────────────────────────────────────────────────────┘
+```
+
+## What it does
+
+- Lists the Hyper-V VMs on your machine and lets you pick one.
+- Accepts **files and folders** dropped anywhere on the window. Folders are walked recursively and
+  their structure is recreated inside the guest.
+- Transfers in the background on a serial queue, with per-file progress, transfer rate and ETA,
+  plus overall progress on the Windows taskbar button.
+- Notifies you when the batch finishes, even if the window is behind something else.
+- Lets you cancel individual files mid-transfer, and retry the ones that failed.
+
+## Requirements
+
+- Windows with the **Hyper-V role** enabled.
+- **.NET 10 SDK** to build (the app targets `net10.0-windows`).
+- **Administrator rights.** The Hyper-V WMI provider requires an elevated token, so the app
+  requests elevation at launch and UAC will prompt every time. This is by design.
+- For the default transfer method, the target VM needs the **Guest Service Interface** integration
+  service enabled. The app detects when it is off and offers a one-click **Enable**.
+
+## Build and run
+
+```powershell
+dotnet build
+dotnet run --project src/HyperVDrop.App
+```
+
+Run the tests with:
+
+```powershell
+dotnet test
+```
+
+## How files actually get into the VM
+
+Two engines are available, selectable in the UI.
+
+### Guest Service Interface (default)
+
+Calls `Msvm_GuestFileService.CopyFilesToGuest` on the Hyper-V WMI provider and polls the
+`Msvm_ConcreteJob` it returns for `PercentComplete`.
+
+This is the interesting part: the familiar `Copy-VMFile` cmdlet wraps the same API but blocks and
+throws away the job, which is why it can never show progress. Talking to the job directly is what
+makes a real progress bar possible. Files are submitted one per call so each gets its own job.
+
+- No guest credentials needed.
+- No networking needed in the VM — everything travels over VMBus.
+- Works with Windows guests, and Linux guests running `hv_fcopy_daemon`.
+- Progress granularity is whole percent, because that is all Hyper-V reports.
+
+### PowerShell Direct (fallback)
+
+For VMs where the Guest Service Interface is unavailable. A single `powershell.exe` worker process
+is kept alive for the batch, opens one `PSSession` to the VM, and streams each file in chunks.
+
+- Requires guest credentials, and a Windows guest.
+- Progress is byte-exact, so it is actually finer-grained than the default engine.
+- Credentials are passed to the worker on standard input. They never appear on a command line and
+  are never written to disk.
+
+The engine runs in a child process rather than through the PowerShell SDK NuGet package, which
+would have added roughly 150 MB to the build output.
+
+## Troubleshooting
+
+### Dropping files does nothing
+
+This is the one to know about. HyperVDrop must run elevated, which puts its window at high
+integrity. Windows **User Interface Privilege Isolation** then silently discards drag & drop
+messages sent from medium-integrity Explorer — the app looks perfectly healthy and just ignores
+every drop.
+
+HyperVDrop works around this by calling `ChangeWindowMessageFilterEx` for `WM_DROPFILES`,
+`WM_COPYDATA` and `WM_COPYGLOBALDATA` when the window is created. If your environment blocks that
+anyway, the app says so and you can still use **Add files… / Add folder…** or **Ctrl+V**.
+
+### "Access denied" on a file that you can clearly read
+
+`CopyFilesToGuest` is executed by the Hyper-V Virtual Machine Management service, not by you. That
+service cannot see your per-user drive mappings and has no credentials for remote shares, so files
+on `Z:\` or `\\server\share` fail with a confusing access error.
+
+HyperVDrop detects network sources and stages them into `%ProgramData%\HyperVDrop\staging` first,
+then copies from there and cleans up. You can switch this off in settings.
+
+### "The guest file service is not available"
+
+The VM is not running, or the Guest Service Interface integration service is off. Use the
+**Enable** link next to the status text, and confirm integration services are installed and running
+inside the guest.
+
+### Nothing found, or "not running as an administrator"
+
+The Hyper-V WMI provider does not deny access to an unelevated caller — it just returns an empty
+list. HyperVDrop checks for elevation so this shows up as a clear message rather than "no virtual
+machines found".
+
+## Project layout
+
+```
+src/HyperVDrop.Core/     Hyper-V access, transfer queue, settings. No UI dependencies.
+  HyperV/                WMI plumbing and both copy engines
+  Transfer/              drop expansion, queue, rate estimation, staging
+  Settings/              JSON-backed preferences
+src/HyperVDrop.App/      WPF front end (net10.0-windows)
+  Interop/               UIPI drag & drop fix, taskbar flash
+  ViewModels/            MVVM layer
+tests/HyperVDrop.Core.Tests/
+```
+
+`HyperVDrop.Core` is deliberately free of UI and Hyper-V-instance dependencies at its seams: copy
+engines sit behind `IGuestFileCopier` and machine enumeration behind `IVmProvider`, so the queue,
+drop expansion, error mapping and settings are all unit tested without a hypervisor.
+
+## Limitations
+
+- Host to guest only. `CopyFilesToGuest` is one-directional.
+- The destination is typed in, not browsed. There is no API to enumerate the guest filesystem over
+  this transport. HyperVDrop remembers the last destination per VM.
+- The VM must be running.

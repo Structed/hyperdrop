@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/HyperVDrop.App/HyperVDrop.App.csproj" />
+    <Project Path="src/HyperVDrop.Core/HyperVDrop.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/HyperVDrop.Core.Tests/HyperVDrop.Core.Tests.csproj" />
+  </Folder>
+</Solution>
