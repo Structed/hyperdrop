@@ -1,5 +1,7 @@
 # HyperDrop
 
+<img src="assets/icon/hyperdrop-256.png" alt="HyperDrop icon" width="96" />
+
 A small Windows desktop app that lets you drag files and folders straight into a
 running Hyper-V virtual machine, with real progress and a notification when it finishes.
 
@@ -135,14 +137,29 @@ src/HyperDrop.Core/     Hyper-V access, transfer queue, settings. No UI dependen
   Transfer/              drop expansion, queue, rate estimation, staging
   Settings/              JSON-backed preferences
 src/HyperDrop.App/      WPF front end (net10.0-windows)
+  Assets/                the application icon
   Interop/               UIPI drag & drop fix, taskbar flash
   ViewModels/            MVVM layer
+assets/icon/            icon artwork and the script that renders it
 tests/HyperDrop.Core.Tests/
 ```
 
 `HyperDrop.Core` is deliberately free of UI and Hyper-V-instance dependencies at its seams: copy
 engines sit behind `IGuestFileCopier` and machine enumeration behind `IVmProvider`, so the queue,
 drop expansion, error mapping and settings are all unit tested without a hypervisor.
+
+## The icon
+
+The icon is generated rather than hand-drawn. `assets/icon/New-HyperDropIcon.ps1` declares the
+artwork once and renders it with WPF, so there is no binary original to keep in sync:
+
+```powershell
+pwsh -File assets/icon/New-HyperDropIcon.ps1
+```
+
+That writes `src/HyperDrop.App/Assets/HyperDrop.ico` with nine frames from 16 to 256 pixels, plus
+the SVG original and the PNG above. Frames at 16, 20 and 24 pixels drop the arrow inside the
+droplet, because at that scale it turns into a smudge and the silhouette is what the eye reads.
 
 ## Limitations
 

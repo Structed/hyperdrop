@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>HyperDrop</title>
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3BA9F5" />
+      <stop offset="0.5" stop-color="#1276C7" />
+      <stop offset="1" stop-color="#0A4E92" />
+    </linearGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.22" />
+      <stop offset="0.45" stop-color="#FFFFFF" stop-opacity="0" />
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="58" fill="url(#tile)" />
+  <rect width="256" height="256" rx="58" fill="url(#gloss)" />
+  <rect x="4" y="4" width="248" height="248" rx="54"
+        fill="none" stroke="#FFFFFF" stroke-opacity="0.16" stroke-width="3" />
+  <path fill="#FFFFFF" fill-rule="evenodd" d="M 128,34 C 152,68 182,102 182,140 A 54,54 0 1 1 74,140 C 74,102 104,68 128,34 Z M 117,88 L 139,88 L 139,142 L 156,142 L 128,178 L 100,142 L 117,142 Z" />
+  <rect x="56" y="210" width="144" height="18"
+        rx="9" fill="#FFFFFF" fill-opacity="0.9" />
+</svg>
