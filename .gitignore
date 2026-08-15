@@ -3,6 +3,8 @@
 [Oo]bj/
 [Oo]ut/
 artifacts/
+# Output directory used by the publish step in .github/workflows/release.yml
+publish/
 
 ## Visual Studio / Rider / VS Code
 .vs/

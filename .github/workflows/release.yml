@@ -1,0 +1,92 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Needed to push the tag and create the release.
+permissions:
+  contents: write
+
+# Two merges landing seconds apart would otherwise race to create a release.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # HyperDrop targets net10.0-windows and uses WPF, so it can only build on Windows.
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # CalVer. github.run_number is scoped to this workflow file, so it starts at 1 and only
+      # ever increases, which keeps two merges on the same day from producing the same tag.
+      - name: Compute version
+        id: version
+        shell: pwsh
+        run: |
+          $now = [DateTime]::UtcNow
+          $version = "$($now.Year).$($now.Month).$($now.Day).${{ github.run_number }}"
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version"    >> $env:GITHUB_OUTPUT
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      # The test suite is deliberately free of Hyper-V dependencies so it runs on a plain
+      # GitHub runner with no Hyper-V role and no elevation.
+      - name: Test
+        run: dotnet test --no-build --configuration Release --verbosity normal
+
+      # Self-contained so users need no .NET runtime installed. No trimming: it is unsupported
+      # for WPF and strips types that are only ever resolved through XAML.
+      #
+      # No --no-restore here. --runtime win-x64 needs a RID-specific restore, which the build
+      # step above deliberately does not do.
+      - name: Publish
+        run: >
+          dotnet publish src/HyperDrop.App
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -p:Version=${{ steps.version.outputs.version }}
+          --output publish
+
+      # Excluding *.pdb rather than naming HyperDrop.exe: if a native dependency ever fails to
+      # embed into the bundle, the zip still contains a working app instead of a broken one.
+      - name: Package
+        shell: pwsh
+        run: |
+          $name = "HyperDrop-${{ steps.version.outputs.tag }}-win-x64"
+          New-Item -ItemType Directory -Path artifacts | Out-Null
+          Compress-Archive -Path (Get-ChildItem publish -Exclude *.pdb) `
+                           -DestinationPath "artifacts/$name.zip"
+          $hash = (Get-FileHash "artifacts/$name.zip" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $name.zip" | Set-Content "artifacts/$name.zip.sha256"
+
+      # --target pins the release to the commit that was actually built, rather than whatever
+      # main points at by the time this step runs. --generate-notes picks up .github/release.yml.
+      - name: Create release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create ${{ steps.version.outputs.tag }} `
+            (Get-ChildItem artifacts | ForEach-Object FullName) `
+            --title ${{ steps.version.outputs.tag }} `
+            --target $env:GITHUB_SHA `
+            --generate-notes

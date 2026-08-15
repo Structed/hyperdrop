@@ -51,7 +51,7 @@ scripts:
 
   # Build output is regenerable, so reclaim it when a session is archived.
   - name: Clean build output
-    command: 'Get-ChildItem -Path . -Include bin,obj -Recurse -Directory -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue'
+    command: 'Get-ChildItem -Path . -Include bin,obj,publish,artifacts -Recurse -Directory -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue'
     triggers:
       - session.archive
 

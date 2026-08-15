@@ -1,0 +1,22 @@
+# Categorises the notes that `gh release create --generate-notes` produces for each release.
+# See https://docs.github.com/repositories/releasing-projects-on-github/automatically-generated-release-notes
+changelog:
+  exclude:
+    labels:
+      - ignore-for-release
+  categories:
+    - title: Features
+      labels:
+        - enhancement
+        - feature
+    - title: Fixes
+      labels:
+        - bug
+        - fix
+    - title: Dependencies
+      labels:
+        - dependencies
+    # Catch-all, so a pull request with no labels still shows up.
+    - title: Other changes
+      labels:
+        - "*"
