@@ -277,11 +277,19 @@
                             Visibility="{Binding HasTransfers, Converter={StaticResource BoolToVisibility}}" />
                 </StackPanel>
 
-                <TextBlock Grid.Row="1" Grid.Column="0"
-                           Text="{Binding OverallText}"
-                           Style="{StaticResource CaptionText}"
-                           Margin="0,8,0,0"
-                           Visibility="{Binding OverallText, Converter={StaticResource StringToVisibility}}" />
+                <StackPanel Grid.Row="1" Grid.Column="0"
+                            Orientation="Horizontal"
+                            Margin="0,8,0,0">
+                    <Button Content="About"
+                            Style="{StaticResource LinkButton}"
+                            Margin="-6,0,0,0"
+                            Click="OnAbout" />
+                    <TextBlock Text="{Binding OverallText}"
+                               Style="{StaticResource CaptionText}"
+                               VerticalAlignment="Center"
+                               Margin="6,0,0,0"
+                               Visibility="{Binding OverallText, Converter={StaticResource StringToVisibility}}" />
+                </StackPanel>
 
                 <TextBlock Grid.Row="1" Grid.Column="1"
                            Text="{Binding StatusMessage}"
