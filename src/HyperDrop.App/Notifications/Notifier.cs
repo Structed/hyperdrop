@@ -1,3 +1,4 @@
+using System.IO;
 using System.Media;
 using System.Windows;
 using HyperDrop.App.Interop;
@@ -17,15 +18,20 @@ namespace HyperDrop.App.Notifications;
 /// </remarks>
 public sealed class Notifier : IDisposable
 {
+    private static readonly Uri IconUri = new("pack://application:,,,/Assets/HyperDrop.ico", UriKind.Absolute);
+
     private readonly Forms.NotifyIcon _trayIcon;
+    private readonly System.Drawing.Icon? _appIcon;
     private Window? _window;
     private bool _disposed;
 
     public Notifier()
     {
+        _appIcon = LoadAppIcon();
+
         _trayIcon = new Forms.NotifyIcon
         {
-            Icon = System.Drawing.SystemIcons.Application,
+            Icon = _appIcon ?? System.Drawing.SystemIcons.Application,
             Text = "HyperDrop",
             Visible = false,
         };
@@ -36,6 +42,34 @@ public sealed class Notifier : IDisposable
             Hide();
             RestoreWindow();
         };
+    }
+
+    /// <summary>
+    /// Loads the application icon at the size the notification area asks for, so the tray picks the
+    /// frame matching the current DPI instead of rescaling whichever one happens to come first.
+    /// </summary>
+    /// <remarks>
+    /// A missing or unreadable icon must not cost the user their completion notification, so this
+    /// falls back to the stock application icon rather than throwing.
+    /// </remarks>
+    private static System.Drawing.Icon? LoadAppIcon()
+    {
+        try
+        {
+            var resource = Application.GetResourceStream(IconUri);
+
+            if (resource is null)
+            {
+                return null;
+            }
+
+            using var stream = resource.Stream;
+            return new System.Drawing.Icon(stream, Forms.SystemInformation.SmallIconSize);
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException)
+        {
+            return null;
+        }
     }
 
     /// <summary>Associates the notifier with the main window so it can flash and restore it.</summary>
@@ -139,5 +173,6 @@ public sealed class Notifier : IDisposable
         _disposed = true;
         _trayIcon.Visible = false;
         _trayIcon.Dispose();
+        _appIcon?.Dispose();
     }
 }

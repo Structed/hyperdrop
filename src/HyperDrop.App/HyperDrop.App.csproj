@@ -7,6 +7,7 @@
     <!-- WinForms is pulled in purely for NotifyIcon (tray balloon) and the folder browser. -->
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\HyperDrop.ico</ApplicationIcon>
     <AssemblyName>HyperDrop</AssemblyName>
     <RootNamespace>HyperDrop.App</RootNamespace>
     <!-- Surfaced by the About dialog and by the file properties of HyperDrop.exe. -->
@@ -25,6 +26,14 @@
     -->
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      ApplicationIcon only stamps the Win32 icon onto the executable. The same file is embedded as a
+      resource so the windows and the tray notification can load it through a pack URI.
+    -->
+    <Resource Include="Assets\HyperDrop.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
