@@ -92,6 +92,12 @@ public partial class MainWindow : Window
         return dialog.ShowDialog() == true ? dialog.Credentials : null;
     }
 
+    private void OnAbout(object sender, RoutedEventArgs e)
+    {
+        var dialog = new AboutWindow { Owner = this };
+        dialog.ShowDialog();
+    }
+
     private void OnDragEnter(object sender, DragEventArgs e) => UpdateDragState(e);
 
     private void OnDragOver(object sender, DragEventArgs e) => UpdateDragState(e);
