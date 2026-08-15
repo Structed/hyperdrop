@@ -1,0 +1,59 @@
+# Repository configuration for the GitHub Copilot app.
+# See https://docs.github.com/copilot/reference/github-copilot-app-reference/repository-configuration
+#
+# The app asks you to review and accept this file before it applies anything from it.
+# Read the scripts below before accepting.
+
+instructions: |
+  HyperVDrop is a WPF desktop app targeting net10.0-windows that copies files and
+  folders into running Hyper-V virtual machines. The solution file is HyperVDrop.slnx
+  (not .sln). Build with `dotnet build`, test with `dotnet test`. Everything here is
+  Windows-only.
+
+  Two things that will cost you time if you do not know them:
+
+  - The app requires elevation, because the Hyper-V WMI provider does. `dotnet run`
+    cannot start it and fails with "The requested operation requires elevation",
+    because it uses CreateProcess and so cannot raise a UAC prompt. Use the Run
+    script below, which goes through Start-Process instead.
+  - Never set InvariantGlobalization to true in Directory.Build.props. WPF resolves
+    FrameworkElement.Language through XmlLanguage, which cannot find a specific
+    culture for "en-us" in invariant mode. The build stays perfectly clean and the
+    app dies before showing its first window.
+
+  Drag and drop works only because Interop/UipiDragDrop.cs calls
+  ChangeWindowMessageFilterEx at window creation. Windows UIPI otherwise silently
+  discards drops sent from medium-integrity Explorer to this elevated window, with no
+  error anywhere. Keep that call if you touch window startup.
+
+  HyperVDrop.Core must stay free of UI dependencies. Copy engines sit behind
+  IGuestFileCopier and machine enumeration behind IVmProvider, which is what lets the
+  transfer queue, drop expansion, rate estimation, error mapping and settings be unit
+  tested without Hyper-V and without elevation. Keep new Hyper-V or WPF specifics
+  behind those seams so the test suite keeps running on a plain CI runner.
+
+scripts:
+  - name: Restore
+    command: dotnet restore
+    triggers:
+      - session.create
+
+  - name: Build
+    command: dotnet build --nologo
+
+  - name: Test
+    command: dotnet test --nologo
+
+  # Builds, then launches through Start-Process so Windows can show the UAC prompt the
+  # app.manifest requires. Running the executable any other way fails with error 740.
+  - name: Run
+    command: 'dotnet build src/HyperVDrop.App --nologo; if ($LASTEXITCODE -eq 0) { Start-Process -FilePath .\src\HyperVDrop.App\bin\Debug\net10.0-windows\HyperVDrop.exe -Verb RunAs }'
+
+  # Build output is regenerable, so reclaim it when a session is archived.
+  - name: Clean build output
+    command: 'Get-ChildItem -Path . -Include bin,obj -Recurse -Directory -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue'
+    triggers:
+      - session.archive
+
+# HyperVDrop is a desktop app and never starts a server, so there is no URL to open.
+auto_open_in_browser: false

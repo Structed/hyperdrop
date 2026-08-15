@@ -42,14 +42,25 @@ anything is actually happening.
 
 ```powershell
 dotnet build
-dotnet run --project src/HyperVDrop.App
 ```
+
+`dotnet run` **cannot** start HyperVDrop. It launches the executable with `CreateProcess`, which
+cannot raise a UAC prompt, so it fails with *"The requested operation requires elevation"*. Start it
+through the shell instead, so Windows can elevate it:
+
+```powershell
+Start-Process .\src\HyperVDrop.App\bin\Debug\net10.0-windows\HyperVDrop.exe -Verb RunAs
+```
+
+The **Run** script in [`.github/github-app.yml`](.github/github-app.yml) does exactly this.
 
 Run the tests with:
 
 ```powershell
 dotnet test
 ```
+
+The test suite needs neither Hyper-V nor elevation.
 
 ## How files actually get into the VM
 
