@@ -33,10 +33,26 @@ anything is actually happening.
 - Has an **About** dialog, reachable from the link in the bottom left, that reports the version and
   the host facts a bug report needs, with a button to copy them to the clipboard.
 
+## Download
+
+Grab the latest build from the [Releases page](https://github.com/Structed/hyperdrop/releases). Every
+merge to `main` publishes one automatically, versioned by date as `v{year}.{month}.{day}.{build}`.
+
+The zip contains a single self-contained `HyperDrop.exe`, so **no .NET runtime is needed** — unzip it
+anywhere and run it. Each release also ships a `.sha256` file if you want to verify the download.
+
+Two things to expect on first run:
+
+- Windows prompts for elevation. That is by design; the Hyper-V WMI provider requires an elevated
+  token, so the app asks for one up front rather than failing later with an opaque access error.
+- SmartScreen warns that the publisher is unknown, because the executable is not code signed. Choose
+  **More info → Run anyway**, or build from source using the steps below.
+
 ## Requirements
 
 - Windows with the **Hyper-V role** enabled.
-- **.NET 10 SDK** to build (the app targets `net10.0-windows`).
+- **.NET 10 SDK** to build from source. Not needed for the download above, which is self-contained
+  (the app targets `net10.0-windows`).
 - **Administrator rights.** The Hyper-V WMI provider requires an elevated token, so the app
   requests elevation at launch and UAC will prompt every time. This is by design.
 - For the default transfer method, the target VM needs the **Guest Service Interface** integration
