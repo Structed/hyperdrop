@@ -10,6 +10,13 @@ internal static class Wmi
     internal const string VirtualizationNamespace = @"root\virtualization\v2";
 
     /// <summary>
+    /// Stand-in count for when the permission probe cannot run. Deliberately "authorised": a
+    /// diagnostic that fails should leave the user with "no virtual machines found", not with a
+    /// confident and possibly wrong claim that Hyper-V refused them.
+    /// </summary>
+    private const int AssumeAuthorised = 1;
+
+    /// <summary>
     /// Connects to the Hyper-V namespace, converting the two failures users actually hit
     /// (no Hyper-V, no permission) into messages that say what to do about it.
     /// </summary>
@@ -51,25 +58,41 @@ internal static class Wmi
     /// Counts the host's <c>Msvm_VirtualSystemManagementService</c> singleton, which is how we
     /// tell "no virtual machines" apart from "Hyper-V will not talk to this account".
     /// </summary>
-    internal static int CountManagementServices(ManagementScope scope)
+    /// <returns>
+    /// How many instances the caller can see, or <see cref="AssumeAuthorised"/> when the query
+    /// itself fails. This exists only to turn an empty list into a better error message, so it
+    /// must never become the reason a refresh fails.
+    /// </returns>
+    internal static int TryCountManagementServices(ManagementScope scope)
     {
-        using var searcher = new ManagementObjectSearcher(
-            scope,
-            new ObjectQuery("SELECT __PATH FROM Msvm_VirtualSystemManagementService"));
-
-        using var results = searcher.Get();
-
-        var count = 0;
-
-        foreach (ManagementBaseObject item in results)
+        try
         {
-            using (item)
-            {
-                count++;
-            }
-        }
+            using var searcher = new ManagementObjectSearcher(
+                scope,
+                new ObjectQuery("SELECT * FROM Msvm_VirtualSystemManagementService"));
 
-        return count;
+            using var results = searcher.Get();
+
+            var count = 0;
+
+            foreach (ManagementBaseObject item in results)
+            {
+                using (item)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return 0;
+        }
+        catch (ManagementException)
+        {
+            return AssumeAuthorised;
+        }
     }
 
     /// <summary>Escapes a value for safe embedding in a WQL string literal.</summary>

@@ -67,7 +67,45 @@ public sealed class WmiVmProvider : IVmProvider
     private static IReadOnlyList<VirtualMachineInfo> List(CancellationToken cancellationToken)
     {
         var scope = Wmi.ConnectScope();
-        var guestServiceStates = ReadGuestServiceStates(scope);
+
+        try
+        {
+            var guestServiceStates = ReadGuestServiceStates(scope);
+            var machines = ReadMachines(scope, guestServiceStates, cancellationToken);
+
+            // Hyper-V does not fail an unauthorised read, it just returns nothing, which would
+            // otherwise surface as a misleading "no virtual machines found". Having read a machine
+            // already proves access, so the probe is only worth a round trip for an empty list —
+            // and it runs here, once the enumeration above has been released, rather than nested
+            // inside it.
+            if (machines.Count == 0 &&
+                HyperVAccess.IsDenied(Wmi.TryCountManagementServices(scope), virtualMachineCount: 0))
+            {
+                throw HyperVAccess.Denied();
+            }
+
+            return machines
+                .OrderBy(vm => vm.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        catch (ManagementException ex)
+        {
+            // Hyper-V's own text is often just "Generic failure", so name the operation: without
+            // that the message says nothing at all about what was being attempted.
+            throw new HyperDropException(
+                $"Hyper-V could not return the virtual machine list ({ex.Message.Trim()}).",
+                "Refresh to try again. If it keeps happening, restart the \"Hyper-V Virtual Machine "
+                + "Management\" (vmms) service.",
+                ex);
+        }
+    }
+
+    /// <summary>Enumerates the virtual machines, releasing the query before returning.</summary>
+    private static List<VirtualMachineInfo> ReadMachines(
+        ManagementScope scope,
+        Dictionary<string, IntegrationServiceState> guestServiceStates,
+        CancellationToken cancellationToken)
+    {
         var machines = new List<VirtualMachineInfo>();
 
         using var searcher = new ManagementObjectSearcher(
@@ -101,17 +139,9 @@ public sealed class WmiVmProvider : IVmProvider
             }
         }
 
-        // Hyper-V does not fail an unauthorised read, it just returns nothing, which would
-        // otherwise surface as a misleading "no virtual machines found".
-        if (HyperVAccess.IsDenied(Wmi.CountManagementServices(scope), machines.Count))
-        {
-            throw HyperVAccess.Denied();
-        }
-
-        return machines
-            .OrderBy(vm => vm.Name, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        return machines;
     }
+
     /// <summary>
     /// Reads every guest service component in one query and indexes it by VM id, rather than
     /// walking associations per machine which would be one round trip per VM.
