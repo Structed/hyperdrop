@@ -99,7 +99,7 @@ public partial class MainWindow : Window
 
     private void OnAbout(object sender, RoutedEventArgs e)
     {
-        var dialog = new AboutWindow { Owner = this };
+        var dialog = new AboutWindow(_viewModel.Update) { Owner = this };
         dialog.ShowDialog();
     }
 
