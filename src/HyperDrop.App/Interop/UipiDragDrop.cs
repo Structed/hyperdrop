@@ -1,23 +1,24 @@
 using System.Runtime.InteropServices;
-using System.Windows;
-using System.Windows.Interop;
 
 namespace HyperDrop.App.Interop;
 
 /// <summary>
-/// Allows drag &amp; drop messages from lower-integrity processes to reach this window.
+/// Lets legacy <c>WM_DROPFILES</c> drop messages from lower-integrity processes reach a window.
 /// </summary>
 /// <remarks>
 /// <para>
-/// HyperDrop must run elevated because the Hyper-V WMI provider requires it. That puts the window
-/// at high integrity, and Windows User Interface Privilege Isolation silently discards messages
-/// sent to it by medium-integrity processes — including the drag &amp; drop messages Explorer
-/// sends. Without this filter the app looks perfectly healthy and simply ignores every drop.
+/// Windows User Interface Privilege Isolation discards messages sent to a high-integrity window by
+/// a medium-integrity process, which is what Explorer is. <c>ChangeWindowMessageFilterEx</c> opens
+/// a per-window hole for the three messages the legacy drop protocol needs.
+/// <c>WM_COPYGLOBALDATA</c> is the undocumented but essential one: it carries the <c>HGLOBAL</c>
+/// holding the dropped file names.
 /// </para>
 /// <para>
-/// <c>ChangeWindowMessageFilterEx</c> opens a per-window hole for the three messages OLE drag
-/// &amp; drop needs. <c>WM_COPYGLOBALDATA</c> is the undocumented but essential one: it carries the
-/// actual <c>HGLOBAL</c> payload holding the dropped file names.
+/// This is <em>only</em> useful for the legacy protocol. It is widely cited as the fix for drag
+/// &amp; drop into elevated applications, but it does nothing for OLE drag &amp; drop — the
+/// protocol WPF and every other modern framework actually use — because that does not travel by
+/// window message at all. HyperDrop therefore runs unelevated by default, and treats this as the
+/// fallback for when it is launched elevated anyway. See <see cref="WindowDropTarget"/>.
 /// </para>
 /// </remarks>
 internal static partial class UipiDragDrop
@@ -31,15 +32,12 @@ internal static partial class UipiDragDrop
     private static readonly uint[] RequiredMessages = [WmDropFiles, WmCopyData, WmCopyGlobalData];
 
     /// <summary>
-    /// Applies the message filter to a window. Safe to call on a non-elevated process, where it is
-    /// simply a no-op that succeeds.
+    /// Applies the message filter to a window handle. Harmless on an unelevated process, where
+    /// there is no barrier to open in the first place.
     /// </summary>
     /// <returns><c>true</c> when every required message was allowed through.</returns>
-    internal static bool Enable(Window window)
+    internal static bool Enable(IntPtr handle)
     {
-        ArgumentNullException.ThrowIfNull(window);
-
-        var handle = new WindowInteropHelper(window).Handle;
         if (handle == IntPtr.Zero)
         {
             return false;

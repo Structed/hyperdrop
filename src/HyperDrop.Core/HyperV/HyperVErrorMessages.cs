@@ -36,7 +36,7 @@ public static partial class HyperVErrorMessages
         6 => "Hyper-V rejected a parameter type.",
         JobStarted => "The operation was started.",
         32768 => "Hyper-V reported a general failure.",
-        32769 => "Access denied. Run the app as an administrator.",
+        32769 => "Access denied. Your account needs to be in the local Hyper-V Administrators group.",
         32770 => "Hyper-V does not support this operation.",
         32771 => "The virtual machine reported an unknown status.",
         32772 => "The operation timed out.",

@@ -12,25 +12,27 @@ instructions: |
 
   Two things that will cost you time if you do not know them:
 
-  - The app requires elevation, because the Hyper-V WMI provider does. `dotnet run`
-    cannot start it and fails with "The requested operation requires elevation",
-    because it uses CreateProcess and so cannot raise a UAC prompt. Use the Run
-    script below, which goes through Start-Process instead.
+  - The app deliberately runs unelevated (`asInvoker`). Hyper-V access is governed by the
+    local Hyper-V Administrators group, not by elevation, and elevating breaks drag & drop
+    outright. `dotnet run` works fine. Do not "fix" the manifest back to
+    requireAdministrator.
   - Never set InvariantGlobalization to true in Directory.Build.props. WPF resolves
     FrameworkElement.Language through XmlLanguage, which cannot find a specific
     culture for "en-us" in invariant mode. The build stays perfectly clean and the
     app dies before showing its first window.
 
-  Drag and drop works only because Interop/UipiDragDrop.cs calls
-  ChangeWindowMessageFilterEx at window creation. Windows UIPI otherwise silently
-  discards drops sent from medium-integrity Explorer to this elevated window, with no
-  error anywhere. Keep that call if you touch window startup.
+  Drag and drop is the part of this app most likely to be broken by a well-meaning change.
+  WPF only speaks OLE drag & drop, and Windows UIPI blocks that protocol into a window at a
+  higher integrity level than the dragging process — with no error anywhere. Note that
+  ChangeWindowMessageFilterEx does NOT lift it, despite being widely recommended for this:
+  it only reaches the legacy WM_DROPFILES protocol. Interop/WindowDropTarget.cs picks
+  between the two protocols and is where any drop change belongs.
 
   HyperDrop.Core must stay free of UI dependencies. Copy engines sit behind
   IGuestFileCopier and machine enumeration behind IVmProvider, which is what lets the
   transfer queue, drop expansion, rate estimation, error mapping and settings be unit
-  tested without Hyper-V and without elevation. Keep new Hyper-V or WPF specifics
-  behind those seams so the test suite keeps running on a plain CI runner.
+  tested without Hyper-V and without any special group membership. Keep new Hyper-V or WPF
+  specifics behind those seams so the test suite keeps running on a plain CI runner.
 
 scripts:
   - name: Restore
@@ -44,10 +46,9 @@ scripts:
   - name: Test
     command: dotnet test --nologo
 
-  # Builds, then launches through Start-Process so Windows can show the UAC prompt the
-  # app.manifest requires. Running the executable any other way fails with error 740.
+  # The app runs unelevated, so this is an ordinary launch.
   - name: Run
-    command: 'dotnet build src/HyperDrop.App --nologo; if ($LASTEXITCODE -eq 0) { Start-Process -FilePath .\src\HyperDrop.App\bin\Debug\net10.0-windows\HyperDrop.exe -Verb RunAs }'
+    command: 'dotnet build src/HyperDrop.App --nologo; if ($LASTEXITCODE -eq 0) { Start-Process -FilePath .\src\HyperDrop.App\bin\Debug\net10.0-windows\HyperDrop.exe }'
 
   # Build output is regenerable, so reclaim it when a session is archived.
   - name: Clean build output
