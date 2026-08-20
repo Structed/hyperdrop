@@ -30,6 +30,24 @@ public sealed class AppSettings
     /// <summary>Chunk size used by the PowerShell Direct engine.</summary>
     public int PowerShellChunkSizeBytes { get; set; } = 2 * 1024 * 1024;
 
+    /// <summary>
+    /// Look for a newer release on startup. This is the only thing HyperDrop uses the network
+    /// for, so it is a single switch rather than something buried behind several.
+    /// </summary>
+    public bool CheckForUpdatesOnStartup { get; set; } = true;
+
+    /// <summary>
+    /// When the last automatic check ran, used to hold the startup check to once a day. A manual
+    /// check from the About dialog ignores it.
+    /// </summary>
+    public DateTimeOffset? LastUpdateCheckUtc { get; set; }
+
+    /// <summary>
+    /// A version the user chose to skip. Only that exact version is suppressed, so the next
+    /// release surfaces normally.
+    /// </summary>
+    public string? SkippedUpdateVersion { get; set; }
+
     public string DestinationFor(string? vmId) =>
         vmId is not null && DestinationsByVm.TryGetValue(vmId, out var destination) && !string.IsNullOrWhiteSpace(destination)
             ? destination
