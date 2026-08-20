@@ -39,21 +39,26 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Opens the UIPI hole for drag &amp; drop as soon as the window handle exists.
+    /// Chooses and wires up a drop protocol as soon as the window handle exists.
     /// </summary>
     /// <remarks>
-    /// This app runs elevated, and without this Windows would silently discard every drop coming
-    /// from Explorer. If the filter cannot be applied we say so, because the alternative is a
-    /// window that looks fine and ignores the user.
+    /// Unelevated, WPF's own OLE drag &amp; drop works and gives full hover feedback. Elevated,
+    /// Windows blocks it outright and the legacy path is the only one that can still deliver a
+    /// drop, so the window must not advertise an OLE drop target in that case.
     /// </remarks>
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
 
-        if (!UipiDragDrop.Enable(this))
-        {
-            _viewModel.ReportDragDropUnavailable();
-        }
+        var mode = WindowDropTarget.Attach(this, OnLegacyFilesDropped);
+
+        // TextBox opts into drops by default and only understands text, so a file dropped on the
+        // destination box would be rejected on the spot instead of bubbling up to the window. It
+        // also re-registers an OLE drop target, which would suppress the legacy protocol entirely.
+        DestinationBox.AllowDrop = false;
+
+        AboutInfo.DropMode = mode;
+        _viewModel.ReportDropMode(mode);
     }
 
     protected override async void OnContentRendered(EventArgs e)
@@ -127,6 +132,10 @@ public partial class MainWindow : Window
             await _viewModel.HandleDropAsync(paths);
         }
     }
+
+    /// <summary>Handles a drop that arrived over the legacy protocol, which bypasses WPF entirely.</summary>
+    private async void OnLegacyFilesDropped(IReadOnlyList<string> paths) =>
+        await _viewModel.HandleDropAsync(paths);
 
     private async void OnPaste(object sender, ExecutedRoutedEventArgs e)
     {

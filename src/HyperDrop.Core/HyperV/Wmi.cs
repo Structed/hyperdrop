@@ -10,8 +10,15 @@ internal static class Wmi
     internal const string VirtualizationNamespace = @"root\virtualization\v2";
 
     /// <summary>
+    /// Stand-in count for when the permission probe cannot run. Deliberately "authorised": a
+    /// diagnostic that fails should leave the user with "no virtual machines found", not with a
+    /// confident and possibly wrong claim that Hyper-V refused them.
+    /// </summary>
+    private const int AssumeAuthorised = 1;
+
+    /// <summary>
     /// Connects to the Hyper-V namespace, converting the two failures users actually hit
-    /// (no Hyper-V, no elevation) into messages that say what to do about it.
+    /// (no Hyper-V, no permission) into messages that say what to do about it.
     /// </summary>
     internal static ManagementScope ConnectScope()
     {
@@ -36,13 +43,56 @@ internal static class Wmi
         }
         catch (UnauthorizedAccessException ex)
         {
+            var denied = HyperVAccess.Denied();
             throw new HyperDropException(
-                "Access to Hyper-V was denied.",
-                "Run HyperDrop as an administrator.",
-                ex);
+                denied.Message,
+                denied.Remedy,
+                ex,
+                HyperDropFailure.HyperVAccessDenied);
         }
 
         return scope;
+    }
+
+    /// <summary>
+    /// Counts the host's <c>Msvm_VirtualSystemManagementService</c> singleton, which is how we
+    /// tell "no virtual machines" apart from "Hyper-V will not talk to this account".
+    /// </summary>
+    /// <returns>
+    /// How many instances the caller can see, or <see cref="AssumeAuthorised"/> when the query
+    /// itself fails. This exists only to turn an empty list into a better error message, so it
+    /// must never become the reason a refresh fails.
+    /// </returns>
+    internal static int TryCountManagementServices(ManagementScope scope)
+    {
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(
+                scope,
+                new ObjectQuery("SELECT * FROM Msvm_VirtualSystemManagementService"));
+
+            using var results = searcher.Get();
+
+            var count = 0;
+
+            foreach (ManagementBaseObject item in results)
+            {
+                using (item)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return 0;
+        }
+        catch (ManagementException)
+        {
+            return AssumeAuthorised;
+        }
     }
 
     /// <summary>Escapes a value for safe embedding in a WQL string literal.</summary>
@@ -99,10 +149,13 @@ internal static class Wmi
     }
 
     /// <summary>Locates the host's <c>Msvm_VirtualSystemManagementService</c> singleton.</summary>
+    /// <remarks>
+    /// The singleton always exists on a Hyper-V host, so not finding it means the caller was
+    /// filtered out rather than that the host is misconfigured.
+    /// </remarks>
     internal static ManagementObject GetManagementService(ManagementScope scope) =>
         QueryFirst(scope, "SELECT * FROM Msvm_VirtualSystemManagementService")
-        ?? throw new HyperDropException("The Hyper-V Virtual Machine Management service is not available.",
-            "Make sure the \"Hyper-V Virtual Machine Management\" (vmms) service is running.");
+        ?? throw HyperVAccess.Denied();
 
     /// <summary>Locates a virtual machine by its stable GUID.</summary>
     internal static ManagementObject GetVirtualMachine(ManagementScope scope, string vmId) =>

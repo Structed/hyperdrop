@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
+using HyperDrop.App.Interop;
 using HyperDrop.Core.HyperV;
 
 namespace HyperDrop.App;
@@ -30,11 +31,22 @@ internal static class AboutInfo
     public static string OsDescription => RuntimeInformation.OSDescription;
 
     /// <summary>
-    /// Bitness and elevation, which decide whether Hyper-V will talk to this process at all.
+    /// Bitness and elevation. Elevation matters because it decides which drag &amp; drop protocol
+    /// the window can use, which is the single most common thing to go wrong.
     /// </summary>
     public static string ProcessDescription =>
         $"{(Environment.Is64BitProcess ? "64-bit" : "32-bit")}, " +
         $"{(HostEnvironment.IsElevated() ? "elevated" : "not elevated")}";
+
+    /// <summary>How the main window is currently able to receive dropped files.</summary>
+    public static FileDropMode DropMode { get; set; } = FileDropMode.Ole;
+
+    private static string DropModeDescription => DropMode switch
+    {
+        FileDropMode.Ole => "OLE (full)",
+        FileDropMode.Legacy => "legacy WM_DROPFILES (no drag-over highlight)",
+        _ => "unavailable",
+    };
 
     /// <summary>
     /// The same facts as one block of text, so they can be pasted into a bug report.
@@ -45,7 +57,8 @@ internal static class AboutInfo
             $"{ProductName} {Version}",
             $"Runtime: {Runtime}",
             $"OS: {OsDescription}",
-            $"Process: {ProcessDescription}");
+            $"Process: {ProcessDescription}",
+            $"Drag & drop: {DropModeDescription}");
 
     /// <remarks>
     /// The informational version carries the source revision after a '+' once a build has

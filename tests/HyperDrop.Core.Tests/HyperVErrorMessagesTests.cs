@@ -6,7 +6,7 @@ public sealed class HyperVErrorMessagesTests
 {
     [Theory]
     [InlineData(0u, "completed successfully")]
-    [InlineData(32769u, "administrator")]
+    [InlineData(32769u, "Hyper-V Administrators")]
     [InlineData(32775u, "running")]
     [InlineData(32772u, "timed out")]
     public void ForMethodReturn_ExplainsKnownCodes(uint code, string expectedFragment)

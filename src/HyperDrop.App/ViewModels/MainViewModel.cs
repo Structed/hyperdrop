@@ -1,8 +1,11 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Windows.Shell;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HyperDrop.App.Interop;
 using HyperDrop.App.Notifications;
 using HyperDrop.Core;
 using HyperDrop.Core.Abstractions;
@@ -19,6 +22,12 @@ namespace HyperDrop.App.ViewModels;
 public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 {
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// How long to wait for the elevated group-membership command, which is only ever a UAC
+    /// prompt followed by one fast local call.
+    /// </summary>
+    private const int GroupChangeTimeoutMilliseconds = 30_000;
 
     private readonly IVmProvider _vmProvider;
     private readonly SettingsStore _settingsStore;
@@ -115,6 +124,9 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     private bool _isDragOver;
 
     [ObservableProperty]
+    private bool _isHyperVAccessDenied;
+
+    [ObservableProperty]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -155,6 +167,24 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     public string DropHintText => SelectedVm is null
         ? "Select a virtual machine, then drop files here"
         : $"Drop files or folders to copy them into {SelectedVm.Name}";
+
+    /// <summary>The drop protocol the window ended up using, for the About dialog.</summary>
+    public FileDropMode DropMode { get; private set; } = FileDropMode.Ole;
+
+    /// <summary>
+    /// Extra line under the empty-state hint, used to set expectations when the window cannot
+    /// show a drag-over highlight or cannot accept drops at all.
+    /// </summary>
+    public string DropHintDetail => DropMode switch
+    {
+        FileDropMode.Legacy =>
+            "Running elevated, so drops arrive without the usual highlight. " +
+            "You can also use Add files… or press Ctrl+V",
+        FileDropMode.Unavailable =>
+            "Windows is blocking drops into this elevated window. " +
+            "Use Add files… or press Ctrl+V instead",
+        _ => "You can also use Add files… or press Ctrl+V",
+    };
 
     public async Task InitialiseAsync()    {
         await RefreshAsync(quiet: false).ConfigureAwait(true);
@@ -372,6 +402,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         {
             var machines = await _vmProvider.ListAsync().ConfigureAwait(true);
             Reconcile(machines);
+            IsHyperVAccessDenied = false;
 
             if (!quiet)
             {
@@ -384,6 +415,10 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         }
         catch (HyperDropException ex)
         {
+            // Surfaced even on a quiet background refresh: the banner is how the user fixes it,
+            // and hiding it would leave an empty machine list with no explanation.
+            IsHyperVAccessDenied = ex.Failure is HyperDropFailure.HyperVAccessDenied;
+
             if (!quiet)
             {
                 SetStatus(ex.FullMessage, isError: true);
@@ -599,12 +634,125 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     }
 
     /// <summary>
-    /// Warns that Windows refused to open the drag &amp; drop message filter, so the browse and
-    /// paste paths are the only way in.
+    /// Records which drop protocol the window managed to wire up, and warns when that is none.
     /// </summary>
-    public void ReportDragDropUnavailable() => SetStatus(
-        "Windows blocked drag & drop into this elevated window. Use Add files… or Ctrl+V instead.",
-        isError: true);
+    public void ReportDropMode(FileDropMode mode)
+    {
+        DropMode = mode;
+        OnPropertyChanged(nameof(DropMode));
+        OnPropertyChanged(nameof(DropHintDetail));
+
+        if (mode is FileDropMode.Unavailable)
+        {
+            SetStatus(
+                "Windows blocked drag & drop into this elevated window. Use Add files… or Ctrl+V instead.",
+                isError: true);
+        }
+    }
+
+    /// <summary>
+    /// Relaunches HyperDrop with an elevated token, as a way past a Hyper-V permission problem.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately offered second to fixing the group membership: elevating puts the window at
+    /// high integrity, where Windows blocks OLE drag &amp; drop and the app has to fall back to
+    /// the legacy protocol with no drag-over feedback.
+    /// </remarks>
+    [RelayCommand]
+    private void RestartElevated()
+    {
+        if (Environment.ProcessPath is not { Length: > 0 } executable)
+        {
+            SetStatus("HyperDrop could not work out its own location to restart itself.", isError: true);
+            return;
+        }
+
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo(executable)
+            {
+                UseShellExecute = true,
+                Verb = "runas",
+            });
+        }
+        catch (Win32Exception)
+        {
+            // The user dismissed the UAC prompt. Nothing to report; they know what they did.
+            return;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or SystemException)
+        {
+            SetStatus($"HyperDrop could not restart as an administrator: {ex.Message}", isError: true);
+            return;
+        }
+
+        Application.Current?.Shutdown();
+    }
+
+    /// <summary>
+    /// Adds the current account to the local Hyper-V Administrators group, which is the actual
+    /// permission HyperDrop needs.
+    /// </summary>
+    /// <remarks>
+    /// Changing group membership needs an elevated token, so this is a one-shot elevated command
+    /// rather than something the app does itself. Both the group and the account are named by SID,
+    /// because both names are localised and the account may be domain- or Entra-qualified. The new
+    /// membership only lands in a token at logon, so a sign-out is unavoidable.
+    /// </remarks>
+    [RelayCommand]
+    private void JoinHyperVAdministrators()
+    {
+        if (HostEnvironment.CurrentUserSid() is not { Length: > 0 } userSid)
+        {
+            SetStatus("HyperDrop could not identify the current account.", isError: true);
+            return;
+        }
+
+        var command =
+            $"Add-LocalGroupMember -SID '{HyperVAccess.AdministratorsGroupSid}' -Member '{userSid}'";
+
+        var info = new ProcessStartInfo("powershell.exe")
+        {
+            UseShellExecute = true,
+            Verb = "runas",
+            WindowStyle = ProcessWindowStyle.Hidden,
+        };
+
+        info.ArgumentList.Add("-NoProfile");
+        info.ArgumentList.Add("-NonInteractive");
+        info.ArgumentList.Add("-WindowStyle");
+        info.ArgumentList.Add("Hidden");
+        info.ArgumentList.Add("-Command");
+        info.ArgumentList.Add(command);
+
+        try
+        {
+            using var process = Process.Start(info);
+            process?.WaitForExit(GroupChangeTimeoutMilliseconds);
+
+            if (process is { HasExited: true, ExitCode: not 0 })
+            {
+                SetStatus(
+                    "Adding the account to Hyper-V Administrators failed. " +
+                    "Add it manually with lusrmgr.msc, or restart HyperDrop as an administrator.",
+                    isError: true);
+                return;
+            }
+        }
+        catch (Win32Exception)
+        {
+            return;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or SystemException)
+        {
+            SetStatus($"Could not change the group membership: {ex.Message}", isError: true);
+            return;
+        }
+
+        SetStatus(
+            "Added to Hyper-V Administrators. Sign out and back in for it to take effect.",
+            isError: false);
+    }
 
     /// <summary>
     /// Stops work and persists settings synchronously, so nothing is lost if the process exits

@@ -43,8 +43,8 @@ anywhere and run it. Each release also ships a `.sha256` file if you want to ver
 
 Two things to expect on first run:
 
-- Windows prompts for elevation. That is by design; the Hyper-V WMI provider requires an elevated
-  token, so the app asks for one up front rather than failing later with an opaque access error.
+- If your account is not in the **Hyper-V Administrators** group, HyperDrop says so and offers to
+  add it for you. That needs a one-time UAC prompt and a sign-out to take effect.
 - SmartScreen warns that the publisher is unknown, because the executable is not code signed. Choose
   **More info → Run anyway**, or build from source using the steps below.
 
@@ -53,8 +53,10 @@ Two things to expect on first run:
 - Windows with the **Hyper-V role** enabled.
 - **.NET 10 SDK** to build from source. Not needed for the download above, which is self-contained
   (the app targets `net10.0-windows`).
-- **Administrator rights.** The Hyper-V WMI provider requires an elevated token, so the app
-  requests elevation at launch and UAC will prompt every time. This is by design.
+- Membership of the local **Hyper-V Administrators** group. That, not elevation, is what governs
+  access to the Hyper-V WMI provider, and UAC does not strip the group from the everyday token.
+  HyperDrop deliberately runs unelevated, because elevating breaks drag & drop — see
+  [Dropping files does nothing](#dropping-files-does-nothing).
 - For the default transfer method, the target VM needs the **Guest Service Interface** integration
   service enabled. The app detects when it is off and offers a one-click **Enable**.
 
@@ -62,17 +64,8 @@ Two things to expect on first run:
 
 ```powershell
 dotnet build
+dotnet run --project src/HyperDrop.App
 ```
-
-`dotnet run` **cannot** start HyperDrop. It launches the executable with `CreateProcess`, which
-cannot raise a UAC prompt, so it fails with *"The requested operation requires elevation"*. Start it
-through the shell instead, so Windows can elevate it:
-
-```powershell
-Start-Process .\src\HyperDrop.App\bin\Debug\net10.0-windows\HyperDrop.exe -Verb RunAs
-```
-
-The **Run** script in [`.github/github-app.yml`](.github/github-app.yml) does exactly this.
 
 Run the tests with:
 
@@ -80,7 +73,7 @@ Run the tests with:
 dotnet test
 ```
 
-The test suite needs neither Hyper-V nor elevation.
+The test suite needs neither Hyper-V nor any special group membership.
 
 ## How files actually get into the VM
 
@@ -117,14 +110,22 @@ would have added roughly 150 MB to the build output.
 
 ### Dropping files does nothing
 
-This is the one to know about. HyperDrop must run elevated, which puts its window at high
-integrity. Windows **User Interface Privilege Isolation** then silently discards drag & drop
-messages sent from medium-integrity Explorer — the app looks perfectly healthy and just ignores
-every drop.
+This is the one to know about, and it is why HyperDrop does not run elevated.
 
-HyperDrop works around this by calling `ChangeWindowMessageFilterEx` for `WM_DROPFILES`,
-`WM_COPYDATA` and `WM_COPYGLOBALDATA` when the window is created. If your environment blocks that
-anyway, the app says so and you can still use **Add files… / Add folder…** or **Ctrl+V**.
+WPF only speaks **OLE drag & drop**. Windows **User Interface Privilege Isolation** blocks that
+protocol outright when the target window sits at a higher integrity level than the process doing
+the dragging — an elevated window receiving a drop from ordinary Explorer is exactly that case. The
+app looks perfectly healthy and silently ignores every drop.
+
+`ChangeWindowMessageFilterEx` is widely cited as the fix. It is not: it only opens up the legacy
+`WM_DROPFILES` protocol, which OLE drag & drop does not use. HyperDrop shipped that workaround for
+a while and drag & drop still did not work.
+
+So HyperDrop runs unelevated, where OLE drops work normally. If you do start it elevated — through
+**Restart as administrator**, or from an elevated terminal — it falls back to the legacy
+`WM_DROPFILES` protocol, which does survive the integrity boundary once the message filter is
+open. Drops still work there, but Windows gives no drag-over highlight. The About dialog reports
+which protocol is in use.
 
 ### "Access denied" on a file that you can clearly read
 
@@ -141,22 +142,25 @@ The VM is not running, or the Guest Service Interface integration service is off
 **Enable** link next to the status text, and confirm integration services are installed and running
 inside the guest.
 
-### Nothing found, or "not running as an administrator"
+### "Hyper-V will not talk to this account"
 
-The Hyper-V WMI provider does not deny access to an unelevated caller — it just returns an empty
-list. HyperDrop checks for elevation so this shows up as a clear message rather than "no virtual
-machines found".
+Hyper-V does not fail an unauthorised read — it quietly returns nothing, which is indistinguishable
+from a host with no virtual machines on it. HyperDrop tells the two apart by also looking for
+`Msvm_VirtualSystemManagementService`, a host singleton that every authorised caller can see.
+
+The fix is to join the local **Hyper-V Administrators** group, which the banner offers to do for
+you. Restarting as an administrator also works, at the cost of the drag-over highlight.
 
 ## Project layout
 
 ```
 src/HyperDrop.Core/     Hyper-V access, transfer queue, settings. No UI dependencies.
-  HyperV/                WMI plumbing and both copy engines
+  HyperV/                WMI plumbing, permission probe and both copy engines
   Transfer/              drop expansion, queue, rate estimation, staging
   Settings/              JSON-backed preferences
 src/HyperDrop.App/      WPF front end (net10.0-windows)
   Assets/                the application icon
-  Interop/               UIPI drag & drop fix, taskbar flash, de-elevated link opening
+  Interop/               drop protocol selection, taskbar flash, de-elevated link opening
   ViewModels/            MVVM layer
   Views/                 credential prompt, About dialog, styles
 assets/icon/            icon artwork and the script that renders it

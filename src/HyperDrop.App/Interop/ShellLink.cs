@@ -1,15 +1,17 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using HyperDrop.Core.HyperV;
 
 namespace HyperDrop.App.Interop;
 
 /// <summary>
-/// Opens external links from this elevated process.
+/// Opens external links without handing them this process's token.
 /// </summary>
 /// <remarks>
-/// Launching a URL directly would hand the default browser this process's elevated token, so the
-/// link is handed to Explorer instead. Explorer routes it through the shell that is already
-/// running, which opens the browser at the user's own integrity level.
+/// HyperDrop normally runs unelevated, where a URL can simply be handed to the shell. When it has
+/// been started elevated, opening the URL directly would give the default browser an elevated
+/// token, so the link goes to Explorer instead: Explorer routes it through the shell that is
+/// already running, which opens the browser at the user's own integrity level.
 /// </remarks>
 internal static class ShellLink
 {
@@ -17,8 +19,15 @@ internal static class ShellLink
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(url);
 
-        var info = new ProcessStartInfo("explorer.exe") { UseShellExecute = true };
-        info.ArgumentList.Add(url);
+        var info = new ProcessStartInfo(HostEnvironment.IsElevated() ? "explorer.exe" : url)
+        {
+            UseShellExecute = true,
+        };
+
+        if (HostEnvironment.IsElevated())
+        {
+            info.ArgumentList.Add(url);
+        }
 
         try
         {
