@@ -6,14 +6,20 @@
     <security>
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
         <!--
-          Hyper-V WMI (root\virtualization\v2) requires an elevated token, so we always
-          request elevation up front rather than failing later with an opaque access error.
+          Deliberately NOT requireAdministrator.
 
-          Consequence: the window runs at high integrity, and Windows UIPI silently drops
-          drag & drop messages coming from medium-integrity Explorer. UipiDragDrop applies
-          ChangeWindowMessageFilterEx at startup to allow them through.
+          Hyper-V WMI (root\virtualization\v2) is gated on membership of the local
+          "Hyper-V Administrators" group (S-1-5-32-578), which UAC does not strip from the
+          filtered token. Elevation is one way in, not the requirement it was assumed to be.
+
+          Elevating would put the window at high integrity, and Windows UIPI blocks OLE
+          drag & drop from medium-integrity Explorer across that boundary. That cannot be
+          worked around: ChangeWindowMessageFilterEx only opens up the legacy WM_DROPFILES
+          protocol, not the OLE one WPF uses. Running as the invoker is what makes drag &
+          drop work at all. See Interop/WindowDropTarget.cs for the fallback used when the
+          app is launched elevated anyway.
         -->
-        <requestedExecutionLevel level="requireAdministrator" uiAccess="false" />
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
       </requestedPrivileges>
     </security>
   </trustInfo>

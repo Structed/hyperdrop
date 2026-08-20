@@ -12,7 +12,6 @@
         Width="860"
         MinHeight="520"
         MinWidth="680"
-        AllowDrop="True"
         Background="{StaticResource WindowBackgroundBrush}"
         FontFamily="Segoe UI">
 
@@ -26,12 +25,38 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
+            <!-- Hyper-V permission banner, shown when the host refuses this account -->
+            <Border Grid.Row="0"
+                    Style="{StaticResource Card}"
+                    Margin="0,0,0,12"
+                    BorderBrush="{StaticResource ErrorBrush}"
+                    Visibility="{Binding IsHyperVAccessDenied, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel>
+                    <TextBlock Text="Hyper-V will not talk to this account"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource ErrorBrush}" />
+                    <TextBlock Style="{StaticResource CaptionText}"
+                               Margin="0,4,0,0"
+                               TextWrapping="Wrap"
+                               Text="Hyper-V access is granted by the local Hyper-V Administrators group. Joining it is the better fix: running elevated works too, but Windows then blocks the drag &amp; drop highlight." />
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <Button Content="Add me to Hyper-V Administrators"
+                                Style="{StaticResource AccentButton}"
+                                Margin="0,0,8,0"
+                                Command="{Binding JoinHyperVAdministratorsCommand}" />
+                        <Button Content="Restart as administrator"
+                                Command="{Binding RestartElevatedCommand}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
             <!-- Virtual machine selection -->
-            <Border Grid.Row="0" Style="{StaticResource Card}" Margin="0,0,0,12">
+            <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -81,7 +106,7 @@
             </Border>
 
             <!-- Destination and options -->
-            <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12">
+            <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12">
                 <StackPanel>
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -98,6 +123,7 @@
                                    Style="{StaticResource FieldLabel}" />
 
                         <TextBox Grid.Row="1" Grid.Column="0"
+                                 x:Name="DestinationBox"
                                  Text="{Binding DestinationPath, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" />
 
                         <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0">
@@ -128,7 +154,7 @@
             </Border>
 
             <!-- Transfers -->
-            <Border Grid.Row="2" Style="{StaticResource Card}" Padding="0">
+            <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
                 <Grid>
                     <ListBox ItemsSource="{Binding Transfers}"
                              Background="Transparent"
@@ -240,16 +266,19 @@
                                    FontSize="16"
                                    Foreground="{StaticResource TextSecondaryBrush}"
                                    HorizontalAlignment="Center" />
-                        <TextBlock Text="You can also use Add files… or press Ctrl+V"
+                        <TextBlock Text="{Binding DropHintDetail}"
                                    Style="{StaticResource CaptionText}"
                                    Margin="0,6,0,0"
+                                   TextWrapping="Wrap"
+                                   TextAlignment="Center"
+                                   MaxWidth="420"
                                    HorizontalAlignment="Center" />
                     </StackPanel>
                 </Grid>
             </Border>
 
             <!-- Footer -->
-            <Grid Grid.Row="3" Margin="0,12,0,0">
+            <Grid Grid.Row="4" Margin="0,12,0,0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />

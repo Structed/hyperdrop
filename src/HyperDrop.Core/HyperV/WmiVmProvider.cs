@@ -101,13 +101,11 @@ public sealed class WmiVmProvider : IVmProvider
             }
         }
 
-        // The provider does not fail for an unelevated caller, it just returns nothing. Without
-        // this check that would surface as a misleading "no virtual machines found".
-        if (machines.Count == 0 && !HostEnvironment.IsElevated())
+        // Hyper-V does not fail an unauthorised read, it just returns nothing, which would
+        // otherwise surface as a misleading "no virtual machines found".
+        if (HyperVAccess.IsDenied(Wmi.CountManagementServices(scope), machines.Count))
         {
-            throw new HyperDropException(
-                "Hyper-V did not return any virtual machines because HyperDrop is not running as an administrator.",
-                "Close HyperDrop and start it again as an administrator.");
+            throw HyperVAccess.Denied();
         }
 
         return machines
