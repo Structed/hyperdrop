@@ -15,7 +15,16 @@
     <Description>Drag and drop files and folders into a running Hyper-V virtual machine.</Description>
     <Authors>Johannes Ebner</Authors>
     <Company>Johannes Ebner</Company>
+    <Copyright>Copyright (c) 2026 Johannes Ebner</Copyright>
     <Version>1.0.0</Version>
+    <!--
+      Keep the informational version free of the "+<commit sha>" suffix the SDK appends, because
+      it lands in the executable's ProductVersion resource. The SignPath artifact configuration
+      pins ProductVersion to the version passed into the release workflow, and SignPath Foundation
+      requires that restriction to be enforced, so a per-commit suffix would reject every signing
+      request. AboutInfo.ReadVersion strips the suffix anyway, so nothing in the UI changes.
+    -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <!-- Required by the LibraryImport source generator used for the UIPI and taskbar interop. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

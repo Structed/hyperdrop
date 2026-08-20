@@ -1,15 +1,24 @@
 name: release
 
+# Releases are dispatched by hand rather than published on every merge to main, because
+# SignPath Foundation requires a human to approve every signing request. An automatic
+# release would leave a job parked for up to an hour waiting for someone to notice.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release. Leave blank to derive one from the date.'
+        required: false
+        type: string
 
-# Needed to push the tag and create the release.
+# contents: write pushes the tag and creates the release. actions: read lets the SignPath
+# action read the job details and download the artifact it is asked to sign; declaring
+# permissions at all drops the defaults, so it has to be spelled out.
 permissions:
   contents: write
+  actions: read
 
-# Two merges landing seconds apart would otherwise race to create a release.
+# Two dispatches seconds apart would otherwise race to create a release.
 concurrency:
   group: release
   cancel-in-progress: false
@@ -17,6 +26,7 @@ concurrency:
 jobs:
   release:
     # HyperDrop targets net10.0-windows and uses WPF, so it can only build on Windows.
+    # SignPath also requires OSS projects to build on GitHub-hosted agents.
     runs-on: windows-latest
 
     steps:
@@ -28,15 +38,39 @@ jobs:
           dotnet-version: '10.0.x'
 
       # CalVer. github.run_number is scoped to this workflow file, so it starts at 1 and only
-      # ever increases, which keeps two merges on the same day from producing the same tag.
+      # ever increases, which keeps two releases on the same day from producing the same tag.
       - name: Compute version
         id: version
         shell: pwsh
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
         run: |
-          $now = [DateTime]::UtcNow
-          $version = "$($now.Year).$($now.Month).$($now.Day).${{ github.run_number }}"
+          $version = $env:VERSION_INPUT
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            $now = [DateTime]::UtcNow
+            $version = "$($now.Year).$($now.Month).$($now.Day).${{ github.run_number }}"
+          }
+          # The tag gets the "v", so tolerate someone typing it into the input as well.
+          $version = $version.Trim().TrimStart('v', 'V')
           "version=$version" >> $env:GITHUB_OUTPUT
           "tag=v$version"    >> $env:GITHUB_OUTPUT
+
+      # Signing is skipped rather than fatal when it is not configured, so releases still work
+      # while the SignPath Foundation application is pending. The release notes say so.
+      - name: Check signing configuration
+        id: signing
+        shell: pwsh
+        env:
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+        run: |
+          $configured = -not (
+            [string]::IsNullOrWhiteSpace($env:SIGNPATH_API_TOKEN) -or
+            [string]::IsNullOrWhiteSpace($env:SIGNPATH_ORGANIZATION_ID))
+          if (-not $configured) {
+            Write-Output "::warning::SIGNPATH_API_TOKEN or SIGNPATH_ORGANIZATION_ID is not set. Publishing an UNSIGNED build."
+          }
+          "enabled=$($configured.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
 
       - name: Restore
         run: dotnet restore
@@ -66,8 +100,67 @@ jobs:
           -p:Version=${{ steps.version.outputs.version }}
           --output publish
 
+      # SignPath signs what GitHub itself reports as the output of this run, not what the build
+      # script hands it, so the executable has to become a workflow artifact first. That is what
+      # lets a signature attest that the binary really was built from this repository.
+      - name: Upload unsigned executable
+        id: unsigned
+        if: steps.signing.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: HyperDrop-unsigned
+          path: publish/HyperDrop.exe
+          if-no-files-found: error
+
+      # Blocks until a maintainer approves the request in the SignPath web interface, which
+      # SignPath Foundation requires for every release. The default 10 minute wait is far too
+      # short for that, hence the hour.
+      #
+      # The slugs are not secrets. Adjust them to whatever SignPath assigned to this project.
+      # Omitting artifact-configuration-slug uses the project's default configuration.
+      - name: Sign
+        if: steps.signing.outputs.enabled == 'true'
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: hyperdrop
+          signing-policy-slug: release-signing
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed
+          parameters: |
+            version: "${{ steps.version.outputs.version }}"
+
+      # Putting the signed file back where the build left it keeps the packaging step below
+      # unaware that any of this happened.
+      - name: Install signed executable
+        if: steps.signing.outputs.enabled == 'true'
+        shell: pwsh
+        run: Copy-Item signed/HyperDrop.exe publish/HyperDrop.exe -Force
+
+      # A signature that cannot be verified is worse than none, because everything downstream
+      # would ship it as though it were trustworthy. An untimestamped one silently stops
+      # validating when the certificate expires, which for SignPath is soon.
+      - name: Verify signature
+        if: steps.signing.outputs.enabled == 'true'
+        shell: pwsh
+        run: |
+          $signature = Get-AuthenticodeSignature 'publish/HyperDrop.exe'
+          "Signer:      $($signature.SignerCertificate.Subject)"
+          "Timestamper: $($signature.TimeStamperCertificate.Subject)"
+          if ($signature.Status -ne 'Valid') {
+            throw "Signature status is '$($signature.Status)': $($signature.StatusMessage)"
+          }
+          if ($null -eq $signature.TimeStamperCertificate) {
+            throw 'The signature is not timestamped, so it stops validating when the certificate expires.'
+          }
+
       # Excluding *.pdb rather than naming HyperDrop.exe: if a native dependency ever fails to
       # embed into the bundle, the zip still contains a working app instead of a broken one.
+      #
+      # The hash is taken here, after signing, because signing changes the file.
       - name: Package
         shell: pwsh
         run: |
@@ -79,14 +172,22 @@ jobs:
           "$hash  $name.zip" | Set-Content "artifacts/$name.zip.sha256"
 
       # --target pins the release to the commit that was actually built, rather than whatever
-      # main points at by the time this step runs. --generate-notes picks up .github/release.yml.
+      # main points at by the time this step runs. --generate-notes picks up .github/release.yml,
+      # and appends to --notes rather than replacing it.
       - name: Create release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create ${{ steps.version.outputs.tag }} `
-            (Get-ChildItem artifacts | ForEach-Object FullName) `
-            --title ${{ steps.version.outputs.tag }} `
-            --target $env:GITHUB_SHA `
-            --generate-notes
+          $arguments = @(
+            '${{ steps.version.outputs.tag }}'
+            (Get-ChildItem artifacts | ForEach-Object FullName)
+            '--title', '${{ steps.version.outputs.tag }}'
+            '--target', $env:GITHUB_SHA
+            '--generate-notes'
+          )
+          if ('${{ steps.signing.outputs.enabled }}' -ne 'true') {
+            $arguments += '--notes'
+            $arguments += "> [!WARNING]`n> This build is **not code signed**, so Windows SmartScreen will report an unknown publisher."
+          }
+          gh release create $arguments
