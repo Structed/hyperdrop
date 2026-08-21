@@ -1,8 +1,10 @@
 name: build
 
-# Pushes to main are covered by release.yml, which builds and tests before publishing, so
-# there is deliberately no push trigger here.
+# Releases are dispatched by hand from release.yml, so nothing else validates main. This
+# workflow is what keeps main honest between releases.
 on:
+  push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 

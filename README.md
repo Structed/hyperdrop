@@ -27,8 +27,8 @@ anything is actually happening.
 
 ## Download
 
-Grab the latest build from the [Releases page](https://github.com/Structed/hyperdrop/releases). Every
-merge to `main` publishes one automatically, versioned by date as `v{year}.{month}.{day}.{build}`.
+Grab the latest build from the [Releases page](https://github.com/Structed/hyperdrop/releases).
+Releases are cut by hand, versioned by date as `v{year}.{month}.{day}.{build}`.
 
 The zip contains a single self-contained `HyperDrop.exe`, so **no .NET runtime is needed** — unzip it
 anywhere and run it. Each release also ships a `.sha256` file if you want to verify the download.
@@ -39,8 +39,11 @@ Two things to expect on first run:
 
 - If your account is not in the **Hyper-V Administrators** group, HyperDrop says so and offers to
   add it for you. That needs a one-time UAC prompt and a sign-out to take effect.
-- SmartScreen warns that the publisher is unknown, because the executable is not code signed. Choose
-  **More info → Run anyway**, or build from source using the steps below.
+- The executable is code signed, and Windows will name **SignPath Foundation** as the publisher
+  rather than the author — that is how the free certificate for open source projects works, see
+  [Code signing policy](#code-signing-policy) below. SmartScreen still builds reputation per
+  binary, so a fresh release may briefly warn anyway; choose **More info → Run anyway**, or build
+  from source using the steps below.
 
 ## Requirements
 
@@ -230,3 +233,35 @@ droplet, because at that scale it turns into a smudge and the silhouette is what
 - The destination is typed in, not browsed. There is no API to enumerate the guest filesystem over
   this transport. HyperDrop remembers the last destination per VM.
 - The VM must be running.
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by
+[SignPath Foundation](https://signpath.org).
+
+Released builds of `HyperDrop.exe` are Authenticode signed. The certificate belongs to SignPath
+Foundation, so that is the publisher Windows names. Nothing is signed on a developer machine: the
+[release workflow](.github/workflows/release.yml) hands the executable to SignPath as a GitHub
+Actions artifact, and SignPath verifies with GitHub that the binary really is the output of that
+workflow run on this repository before signing it.
+
+**Roles**
+
+- Committers and reviewers: [Johannes Ebner](https://github.com/Structed)
+- Approvers: [Johannes Ebner](https://github.com/Structed)
+
+**Privacy policy**
+
+This program will not transfer any information to other networked systems unless specifically
+requested by the user or the person installing or operating it. Files leave the host only when you
+drop them onto the window or add them explicitly, and they travel over VMBus to the virtual machine
+you selected. Guest credentials entered for PowerShell Direct are passed to the worker process on
+standard input, and are never written to disk.
+
+The only change HyperDrop makes to the system outside its own settings file is adding your account
+to the local **Hyper-V Administrators** group, which it does only when you ask it to and only
+through a UAC prompt.
+
+## License
+
+[MIT](LICENSE). Copyright (c) 2026 Johannes Ebner.
