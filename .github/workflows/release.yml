@@ -39,6 +39,11 @@ jobs:
 
       # CalVer. github.run_number is scoped to this workflow file, so it starts at 1 and only
       # ever increases, which keeps two releases on the same day from producing the same tag.
+      #
+      # Directory.Build.props carries the same shape as a fallback so local builds are dated too,
+      # but only this workflow has run_number, so this is the authoritative version. It reaches
+      # the build as -p:Version= below, which is an MSBuild global property and therefore wins
+      # over the props file. Keep the two in step.
       - name: Compute version
         id: version
         shell: pwsh

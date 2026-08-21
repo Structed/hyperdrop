@@ -16,6 +16,8 @@ public sealed class SettingsStoreTests
         Assert.Null(settings.LastVmId);
         Assert.True(settings.CreateFullPath);
         Assert.False(settings.OverwriteExisting);
+        Assert.True(settings.CheckForUpdatesOnStartup);
+        Assert.Null(settings.LastUpdateCheckUtc);
         Assert.Equal(AppSettings.FallbackDestination, settings.DestinationFor(null));
     }
 
@@ -35,6 +37,9 @@ public sealed class SettingsStoreTests
             PlaySoundOnCompletion = false,
             StageNetworkSources = false,
             PowerShellChunkSizeBytes = 4096,
+            CheckForUpdatesOnStartup = false,
+            LastUpdateCheckUtc = new DateTimeOffset(2026, 8, 20, 9, 30, 0, TimeSpan.Zero),
+            SkippedUpdateVersion = "2026.8.20.7",
         };
 
         settings.SetDestination("vm-1", @"D:\Incoming");
@@ -49,6 +54,9 @@ public sealed class SettingsStoreTests
         Assert.False(reloaded.PlaySoundOnCompletion);
         Assert.False(reloaded.StageNetworkSources);
         Assert.Equal(4096, reloaded.PowerShellChunkSizeBytes);
+        Assert.False(reloaded.CheckForUpdatesOnStartup);
+        Assert.Equal(settings.LastUpdateCheckUtc, reloaded.LastUpdateCheckUtc);
+        Assert.Equal("2026.8.20.7", reloaded.SkippedUpdateVersion);
         Assert.Equal(@"D:\Incoming", reloaded.DestinationFor("vm-1"));
     }
 

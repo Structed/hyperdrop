@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Threading;
+using HyperDrop.Core.Update;
 
 namespace HyperDrop.App;
 
@@ -9,6 +10,10 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
         DispatcherUnhandledException += OnUnhandledException;
+
+        // Reaching this point is what proves the build an update installed actually runs, so it
+        // is also the right moment to delete the version it replaced.
+        UpdateInstaller.CleanupPreviousVersion();
     }
 
     /// <summary>

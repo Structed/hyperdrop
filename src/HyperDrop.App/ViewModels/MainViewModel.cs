@@ -13,6 +13,7 @@ using HyperDrop.Core.HyperV;
 using HyperDrop.Core.Model;
 using HyperDrop.Core.Settings;
 using HyperDrop.Core.Transfer;
+using HyperDrop.Core.Update;
 
 namespace HyperDrop.App.ViewModels;
 
@@ -80,7 +81,15 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         };
 
         _refreshTimer.Tick += async (_, _) => await RefreshAsync(quiet: true).ConfigureAwait(true);
+
+        Update = new UpdateViewModel(
+            _settings,
+            SaveSettings,
+            UpdateChecker.ParseVersion(AboutInfo.Version));
     }
+
+    /// <summary>Update banner state, shared with the About dialog.</summary>
+    public UpdateViewModel Update { get; }
 
     public ObservableCollection<VirtualMachineInfo> VirtualMachines { get; } = [];
 
@@ -201,6 +210,10 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         }
 
         _refreshTimer.Start();
+
+        // Deliberately not awaited: a slow or unreachable network must not hold up the window,
+        // and the check reports itself through the banner when it finds something.
+        _ = Update.CheckOnStartupAsync();
     }
 
     /// <summary>
@@ -514,6 +527,12 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         SaveSettings();
     }
 
+    /// <summary>
+    /// Restarting into a new version mid-copy would abandon whatever is in flight, so the update
+    /// waits for the queue to drain.
+    /// </summary>
+    partial void OnHasActiveTransfersChanged(bool value) => Update.ReportTransfersRunning(value);
+
     private void SaveSettings()
     {
         if (!_suppressSettingsSave)
@@ -770,6 +789,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         _refreshTimer.Stop();
         await _queue.DisposeAsync().ConfigureAwait(false);
         _credentials?.Dispose();
+        Update.Dispose();
         _settingsStore.Save(_settings);
     }
 }

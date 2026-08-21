@@ -1,15 +1,17 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using HyperDrop.App.Interop;
+using HyperDrop.App.ViewModels;
 
 namespace HyperDrop.App.Views;
 
 /// <summary>
-/// Shows the product version and the host facts that are worth quoting in a bug report.
+/// Shows the product version and the host facts that are worth quoting in a bug report, and is
+/// where updates can be checked for by hand.
 /// </summary>
 public partial class AboutWindow : Window
 {
-    public AboutWindow()
+    public AboutWindow(UpdateViewModel update)
     {
         InitializeComponent();
 
@@ -20,6 +22,8 @@ public partial class AboutWindow : Window
         ProcessText.Text = AboutInfo.ProcessDescription;
         CreditText.Text = AboutInfo.Credit;
         ProjectLink.Content = AboutInfo.ProjectDisplayUrl;
+
+        UpdatePanel.DataContext = update;
     }
 
     private void OnOpenProject(object sender, RoutedEventArgs e)

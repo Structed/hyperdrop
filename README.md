@@ -8,18 +8,6 @@ running Hyper-V virtual machine, with real progress and a notification when it f
 No network share. No mounting VHDX files. No `Copy-VMFile` in an elevated prompt wondering whether
 anything is actually happening.
 
-```
-┌────────────────────────────────────────────────────────────┐
-│ VM: [ WIN11-DEV        ▾ ] ⟳    Guest Service: Enabled      │
-│ Destination in guest: [ C:\Users\Public\Downloads       ]  │
-│ ☐ Overwrite existing      ☑ Create destination folders     │
-├────────────────────────────────────────────────────────────┤
-│ installer.msi     ▓▓▓▓▓▓▓▓░░░░  64%  18.2 MB/s  0:07 left ✕│
-│ docs\readme.md    ✔ Done                                   │
-├────────────────────────────────────────────────────────────┤
-│ Overall ▓▓▓▓▓░░░░░  2 of 5 files       [ Clear completed ] │
-└────────────────────────────────────────────────────────────┘
-```
 
 ## What it does
 
@@ -30,8 +18,12 @@ anything is actually happening.
   plus overall progress on the Windows taskbar button.
 - Notifies you when the batch finishes, even if the window is behind something else.
 - Lets you cancel individual files mid-transfer, and retry the ones that failed.
+- **Updates itself** from the Releases page, with a banner and an explicit "Update and restart".
 - Has an **About** dialog, reachable from the link in the bottom left, that reports the version and
   the host facts a bug report needs, with a button to copy them to the clipboard.
+
+  <img width="846" height="633" alt="image" src="https://github.com/user-attachments/assets/3ba48d9c-0040-49c1-9cf1-a8e740c9d640" />
+
 
 ## Download
 
@@ -40,6 +32,8 @@ Releases are cut by hand, versioned by date as `v{year}.{month}.{day}.{build}`.
 
 The zip contains a single self-contained `HyperDrop.exe`, so **no .NET runtime is needed** — unzip it
 anywhere and run it. Each release also ships a `.sha256` file if you want to verify the download.
+After the first run HyperDrop keeps itself current, so this is normally the only manual download —
+see [Updates](#updates).
 
 Two things to expect on first run:
 
@@ -78,6 +72,11 @@ dotnet test
 
 The test suite needs neither Hyper-V nor any special group membership.
 
+A local build is versioned `{year}.{month}.{day}.0-dev` from today's UTC date, so that is what the
+About dialog shows. Released builds get their version from `release.yml` instead, which is the only
+place that can number two releases on the same day apart. See [Updates](#updates) for why the `-dev`
+suffix matters.
+
 ## How files actually get into the VM
 
 Two engines are available, selectable in the UI.
@@ -108,6 +107,45 @@ is kept alive for the batch, opens one `PSSession` to the VM, and streams each f
 
 The engine runs in a child process rather than through the PowerShell SDK NuGet package, which
 would have added roughly 150 MB to the build output.
+
+## Updates
+
+HyperDrop keeps itself up to date. On startup — at most once a day — it asks the GitHub Releases
+API whether anything newer than the running build has been published, and shows a banner if so.
+Nothing is downloaded until you press **Update and restart**.
+
+This is the only thing HyperDrop uses the network for. Turn it off with **Check for updates
+automatically** in the About dialog, and it will never call out again.
+
+What happens when you accept an update:
+
+1. The release zip is downloaded to `%LOCALAPPDATA%\HyperDrop\updates`.
+2. Its SHA256 is compared with the `.sha256` published beside it. A mismatch discards the download
+   and stops there.
+3. The current files are renamed aside to `.old`, the new ones are moved into place, and HyperDrop
+   restarts. If any part of that fails, the renamed files are put back.
+4. The `.old` leftovers are deleted the next time HyperDrop starts, which is also what proves the
+   new build runs.
+
+No helper process and no installer are involved. Windows refuses to delete or overwrite a running
+executable, but it does allow one to be *renamed* within its folder, and a renamed executable keeps
+running quite happily — which is the whole trick.
+
+A few things worth knowing:
+
+- **The restart waits for your transfers.** While files are still moving the button is disabled,
+  because restarting would abandon whatever is in flight.
+- **Read-only folders are detected, not fought.** A copy unzipped into `Program Files` cannot be
+  replaced by an unelevated process, and HyperDrop deliberately stays unelevated, so it says so and
+  points at the Releases page instead of asking for UAC.
+- **Local builds never update themselves.** A build that did not come from CI is versioned
+  `{year}.{month}.{day}.0-dev`, and that `-dev` suffix is not a version HyperDrop can compare
+  against a release tag. It treats anything it cannot read as a local build and stays quiet, rather
+  than offering to overwrite the build you are testing with a release published the same day.
+- **The check is unauthenticated**, so no token is needed. GitHub allows 60 requests an hour per
+  address and once a day is nowhere near it.
+- **SmartScreen does not re-prompt.** The download does not go through a browser, so the replacement
+  executable is not tagged with a mark of the web.
 
 ## Troubleshooting
 
@@ -160,6 +198,7 @@ you. Restarting as an administrator also works, at the cost of the drag-over hig
 src/HyperDrop.Core/     Hyper-V access, transfer queue, settings. No UI dependencies.
   HyperV/                WMI plumbing, permission probe and both copy engines
   Transfer/              drop expansion, queue, rate estimation, staging
+  Update/                release lookup, checksum verification and the self-update swap
   Settings/              JSON-backed preferences
 src/HyperDrop.App/      WPF front end (net10.0-windows)
   Assets/                the application icon
@@ -171,8 +210,9 @@ tests/HyperDrop.Core.Tests/
 ```
 
 `HyperDrop.Core` is deliberately free of UI and Hyper-V-instance dependencies at its seams: copy
-engines sit behind `IGuestFileCopier` and machine enumeration behind `IVmProvider`, so the queue,
-drop expansion, error mapping and settings are all unit tested without a hypervisor.
+engines sit behind `IGuestFileCopier`, machine enumeration behind `IVmProvider` and release lookup
+behind `IUpdateSource`, so the queue, drop expansion, error mapping, settings and the whole update
+flow are unit tested without a hypervisor and without a network.
 
 ## The icon
 

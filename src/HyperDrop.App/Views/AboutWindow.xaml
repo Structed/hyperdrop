@@ -65,6 +65,40 @@
             </Grid>
         </Border>
 
+        <Border x:Name="UpdatePanel" Style="{StaticResource Card}" Margin="0,12,0,0">
+            <StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <CheckBox Grid.Column="0"
+                              Content="Check for updates automatically"
+                              VerticalAlignment="Center"
+                              IsChecked="{Binding CheckAutomatically, Mode=TwoWay}" />
+
+                    <Button Grid.Column="1"
+                            Content="Check now"
+                            MinWidth="88"
+                            Command="{Binding CheckCommand}" />
+                </Grid>
+
+                <TextBlock Text="{Binding Headline}"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource AccentBrush}"
+                           TextWrapping="Wrap"
+                           Margin="0,10,0,0"
+                           Visibility="{Binding IsBannerVisible, Converter={StaticResource BoolToVisibility}}" />
+
+                <TextBlock Text="{Binding Detail}"
+                           Style="{StaticResource CaptionText}"
+                           TextWrapping="Wrap"
+                           Margin="0,4,0,0"
+                           Visibility="{Binding Detail, Converter={StaticResource StringToVisibility}}" />
+            </StackPanel>
+        </Border>
+
         <TextBlock x:Name="CreditText"
                    Style="{StaticResource CaptionText}"
                    TextWrapping="Wrap"

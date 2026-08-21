@@ -26,12 +26,72 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <!-- Hyper-V permission banner, shown when the host refuses this account -->
+            <!-- Update banner, shown once a newer release has been found -->
             <Border Grid.Row="0"
+                    Style="{StaticResource Card}"
+                    Margin="0,0,0,12"
+                    BorderBrush="{StaticResource AccentBrush}"
+                    DataContext="{Binding Update}"
+                    Visibility="{Binding IsBannerVisible, Converter={StaticResource BoolToVisibility}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Headline}"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource AccentBrush}" />
+
+                        <TextBlock Text="{Binding Detail}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,4,0,0"
+                                   Visibility="{Binding Detail, Converter={StaticResource StringToVisibility}}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsFailed}" Value="True">
+                                            <Setter Property="Foreground" Value="{StaticResource ErrorBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+
+                        <ProgressBar Style="{StaticResource ThinProgressBar}"
+                                     Minimum="0"
+                                     Maximum="1"
+                                     Margin="0,8,0,0"
+                                     Value="{Binding Progress, Mode=OneWay}"
+                                     Visibility="{Binding ShowProgress, Converter={StaticResource BoolToVisibility}}" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center"
+                                Margin="12,0,0,0">
+                        <Button Content="What's new"
+                                Style="{StaticResource LinkButton}"
+                                Margin="0,0,8,0"
+                                Command="{Binding OpenReleaseCommand}" />
+                        <Button Content="Skip this version"
+                                Margin="0,0,8,0"
+                                Command="{Binding SkipCommand}" />
+                        <Button Content="Update and restart"
+                                Style="{StaticResource AccentButton}"
+                                Command="{Binding InstallCommand}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Hyper-V permission banner, shown when the host refuses this account -->
+            <Border Grid.Row="1"
                     Style="{StaticResource Card}"
                     Margin="0,0,0,12"
                     BorderBrush="{StaticResource ErrorBrush}"
@@ -56,7 +116,7 @@
             </Border>
 
             <!-- Virtual machine selection -->
-            <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12">
+            <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -106,7 +166,7 @@
             </Border>
 
             <!-- Destination and options -->
-            <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12">
+            <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,0,0,12">
                 <StackPanel>
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -154,7 +214,7 @@
             </Border>
 
             <!-- Transfers -->
-            <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
+            <Border Grid.Row="4" Style="{StaticResource Card}" Padding="0">
                 <Grid>
                     <ListBox ItemsSource="{Binding Transfers}"
                              Background="Transparent"
@@ -278,7 +338,7 @@
             </Border>
 
             <!-- Footer -->
-            <Grid Grid.Row="4" Margin="0,12,0,0">
+            <Grid Grid.Row="5" Margin="0,12,0,0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
