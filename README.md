@@ -69,6 +69,11 @@ dotnet test
 
 The test suite needs neither Hyper-V nor any special group membership.
 
+A local build is versioned `{year}.{month}.{day}.0-dev` from today's UTC date, so that is what the
+About dialog shows. Released builds get their version from `release.yml` instead, which is the only
+place that can number two releases on the same day apart. See [Updates](#updates) for why the `-dev`
+suffix matters.
+
 ## How files actually get into the VM
 
 Two engines are available, selectable in the UI.
@@ -130,9 +135,10 @@ A few things worth knowing:
 - **Read-only folders are detected, not fought.** A copy unzipped into `Program Files` cannot be
   replaced by an unelevated process, and HyperDrop deliberately stays unelevated, so it says so and
   points at the Releases page instead of asking for UAC.
-- **Local builds never update themselves.** `dotnet run` produces version `1.0.0`, which every real
-  release is newer than. HyperDrop recognises that placeholder and stays quiet rather than offering
-  to overwrite the build you are testing.
+- **Local builds never update themselves.** A build that did not come from CI is versioned
+  `{year}.{month}.{day}.0-dev`, and that `-dev` suffix is not a version HyperDrop can compare
+  against a release tag. It treats anything it cannot read as a local build and stays quiet, rather
+  than offering to overwrite the build you are testing with a release published the same day.
 - **The check is unauthenticated**, so no token is needed. GitHub allows 60 requests an hour per
   address and once a day is nowhere near it.
 - **SmartScreen does not re-prompt.** The download does not go through a browser, so the replacement

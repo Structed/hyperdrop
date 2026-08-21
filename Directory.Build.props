@@ -14,4 +14,24 @@
     -->
   </PropertyGroup>
 
+  <!--
+    CalVer for builds that are not a release. release.yml computes the authoritative version and
+    passes it as -p:Version=, which is an MSBuild global property and therefore wins over this;
+    only that workflow can, because only it has github.run_number to keep two merges on the same
+    day apart. Keep the shape here in step with the "Compute version" step over there.
+
+    The 'dev' suffix is load-bearing rather than decoration. A local build stamped with a bare
+    2026.8.21.0 compares as older than a release published later the same day, so HyperDrop would
+    offer to overwrite the build under test with a published one. The suffix makes the version
+    unparseable as a release tag, which is what UpdateChecker treats as a developer build.
+
+    Built from .Year/.Month/.Day rather than ToString("yyyy.M.d") because '.' is not a literal in
+    a custom date format string. The first build of each UTC day regenerates AssemblyInfo and so
+    recompiles; that is the price of a date-based version.
+  -->
+  <PropertyGroup Condition=" '$(Version)' == '' ">
+    <VersionPrefix>$([System.DateTime]::UtcNow.Year).$([System.DateTime]::UtcNow.Month).$([System.DateTime]::UtcNow.Day).0</VersionPrefix>
+    <VersionSuffix>dev</VersionSuffix>
+  </PropertyGroup>
+
 </Project>
