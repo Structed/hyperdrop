@@ -8,18 +8,6 @@ running Hyper-V virtual machine, with real progress and a notification when it f
 No network share. No mounting VHDX files. No `Copy-VMFile` in an elevated prompt wondering whether
 anything is actually happening.
 
-```
-┌────────────────────────────────────────────────────────────┐
-│ VM: [ WIN11-DEV        ▾ ] ⟳    Guest Service: Enabled      │
-│ Destination in guest: [ C:\Users\Public\Downloads       ]  │
-│ ☐ Overwrite existing      ☑ Create destination folders     │
-├────────────────────────────────────────────────────────────┤
-│ installer.msi     ▓▓▓▓▓▓▓▓░░░░  64%  18.2 MB/s  0:07 left ✕│
-│ docs\readme.md    ✔ Done                                   │
-├────────────────────────────────────────────────────────────┤
-│ Overall ▓▓▓▓▓░░░░░  2 of 5 files       [ Clear completed ] │
-└────────────────────────────────────────────────────────────┘
-```
 
 ## What it does
 
@@ -33,6 +21,9 @@ anything is actually happening.
 - **Updates itself** from the Releases page, with a banner and an explicit "Update and restart".
 - Has an **About** dialog, reachable from the link in the bottom left, that reports the version and
   the host facts a bug report needs, with a button to copy them to the clipboard.
+
+  <img width="846" height="633" alt="image" src="https://github.com/user-attachments/assets/3ba48d9c-0040-49c1-9cf1-a8e740c9d640" />
+
 
 ## Download
 
