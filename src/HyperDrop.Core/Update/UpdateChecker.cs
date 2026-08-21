@@ -35,9 +35,14 @@ public sealed record UpdateCheckResult(UpdateOutcome Outcome, ReleaseInfo? Relea
 public sealed class UpdateChecker
 {
     /// <summary>
-    /// The placeholder version in <c>HyperDrop.App.csproj</c>. CI overrides it with the real
-    /// CalVer, so a build still carrying it was produced locally.
+    /// The sentinel meaning "not a published build", and what <see cref="ParseVersion"/> falls
+    /// back to when it cannot read a version.
     /// </summary>
+    /// <remarks>
+    /// Nothing stamps this number any more. Local builds carry a date-based version with a
+    /// <c>-dev</c> suffix from <c>Directory.Build.props</c>, which is deliberately unparseable as
+    /// a release version and so lands here.
+    /// </remarks>
     public static readonly Version DeveloperVersion = new(1, 0, 0);
 
     /// <summary>
@@ -63,8 +68,9 @@ public sealed class UpdateChecker
 
     /// <summary>
     /// Whether this build came off a developer machine rather than CI. Those are never offered an
-    /// update: every real release is newer than the placeholder, so the banner would show on every
-    /// <c>dotnet run</c> and offer to overwrite the build under test with a published one.
+    /// update: a local build and a release published the same day differ only in the suffix and
+    /// the final component, so without this the banner would show on <c>dotnet run</c> and offer
+    /// to overwrite the build under test with a published one.
     /// </summary>
     public bool IsDeveloperBuild =>
         CurrentVersion.Major == DeveloperVersion.Major &&
@@ -143,8 +149,10 @@ public sealed class UpdateChecker
     /// Reads the running version out of the string the About dialog shows.
     /// </summary>
     /// <remarks>
-    /// Anything unrecognisable falls back to the developer version, which suppresses updates. A
-    /// build whose version cannot be read is the last thing that should be replacing itself.
+    /// Anything unrecognisable falls back to <see cref="DeveloperVersion"/>, which suppresses
+    /// updates. That covers two cases: a version that genuinely cannot be read, because a build
+    /// whose version is unknown is the last thing that should be replacing itself; and the
+    /// <c>-dev</c> suffix a local build carries, which <see cref="Version"/> refuses on purpose.
     /// </remarks>
     public static Version ParseVersion(string? version) =>
         ReleaseInfo.TryParseTag(version, out var parsed) ? parsed : DeveloperVersion;

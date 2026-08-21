@@ -211,8 +211,26 @@ public sealed class UpdateCheckerTests
     [Theory]
     [InlineData(null)]
     [InlineData("unknown")]
+    // A local build. Directory.Build.props stamps today's date with a -dev suffix, and that suffix
+    // is the whole reason it lands here rather than being compared against a same-day release.
+    [InlineData("2026.8.21.0-dev")]
     public void ParseVersion_WithSomethingUnreadable_FallsBackToSuppressingUpdates(string? text) =>
         Assert.Equal(UpdateChecker.DeveloperVersion, UpdateChecker.ParseVersion(text));
+
+    [Fact]
+    public async Task CheckAsync_OnALocalCalVerBuild_NeverOffersASameDayRelease()
+    {
+        var source = new FakeUpdateSource { Release = ReleaseFor("v2026.8.21.5") };
+        var checker = new UpdateChecker(
+            source,
+            UpdateChecker.ParseVersion("2026.8.21.0-dev"),
+            new FixedTimeProvider(Now));
+
+        var result = await checker.CheckAsync(new AppSettings());
+
+        Assert.Equal(UpdateOutcome.UpToDate, result.Outcome);
+        Assert.Equal(0, source.LatestReleaseCalls);
+    }
 
     private static UpdateChecker CheckerFor(
         ReleaseInfo? release,
